@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trophy, User, Phone, Mail, Gamepad2 } from 'lucide-react';
+import { Plus, Search, Trophy, User, Phone, Mail, Gamepad2, AlertCircle } from 'lucide-react';
 import { jugadoresService, mesasService } from '../services/api';
 
 export default function Jugadores() {
@@ -10,6 +10,8 @@ export default function Jugadores() {
   const [showModal, setShowModal] = useState(false);
   const [showPartidaModal, setShowPartidaModal] = useState(false);
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState(null);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
     cargarJugadores();
@@ -18,10 +20,12 @@ export default function Jugadores() {
 
   const cargarJugadores = async () => {
     try {
+      setError(null);
       const { data } = await jugadoresService.getAll({ activo: true });
       setJugadores(data);
     } catch (error) {
       console.error('Error:', error);
+      setError('Error al cargar los jugadores');
     } finally {
       setLoading(false);
     }
@@ -83,6 +87,20 @@ export default function Jugadores() {
           </button>
         </div>
       </div>
+
+      {/* Alertas de error y éxito */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-500/20 border border-red-500 rounded-lg flex items-center gap-2">
+          <AlertCircle className="text-red-500" size={20} />
+          <span className="text-red-200">{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-4 bg-green-500/20 border border-green-500 rounded-lg flex items-center gap-2">
+          <Trophy className="text-green-500" size={20} />
+          <span className="text-green-200">{success}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Ranking */}
@@ -233,15 +251,19 @@ function NuevoJugadorModal({ onClose, onCreated }) {
     nivel: 'principiante'
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await jugadoresService.create(formData);
       onCreated();
     } catch (error) {
       console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al crear el jugador';
+      setError(mensaje);
     } finally {
       setLoading(false);
     }
@@ -343,6 +365,7 @@ function RegistrarPartidaModal({ jugadores, onClose, onCreated }) {
     puntos_juego: 50
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     cargarMesas();
@@ -357,14 +380,27 @@ function RegistrarPartidaModal({ jugadores, onClose, onCreated }) {
     }
   };
 
+  const handleJugador1Change = (e) => {
+    const j1 = e.target.value;
+    setFormData({
+      ...formData,
+      id_jugador1: j1,
+      // Limpiar jugador 2 si es el mismo
+      id_jugador2: formData.id_jugador2 === j1 ? '' : formData.id_jugador2
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await jugadoresService.registrarPartida(formData);
       onCreated();
     } catch (error) {
       console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al registrar la partida';
+      setError(mensaje);
     } finally {
       setLoading(false);
     }
@@ -437,7 +473,7 @@ function RegistrarPartidaModal({ jugadores, onClose, onCreated }) {
               <label className="block text-sm font-medium text-gray-300 mb-1">Jugador 1 *</label>
               <select
                 value={formData.id_jugador1}
-                onChange={(e) => setFormData({...formData, id_jugador1: e.target.value})}
+                onChange={handleJugador1Change}
                 className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
                 required
               >
@@ -462,6 +498,9 @@ function RegistrarPartidaModal({ jugadores, onClose, onCreated }) {
               </select>
             </div>
           </div>
+          {error && (
+            <p className="text-red-400 text-sm">{error}</p>
+          )}
 
           {/* Mesa */}
           <div>

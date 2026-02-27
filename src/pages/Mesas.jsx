@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Pause, Square, Plus, Clock, DollarSign } from 'lucide-react';
+import { Play, Pause, Square, Plus, Clock, DollarSign, AlertCircle } from 'lucide-react';
 import { mesasService, sesionesService } from '../services/api';
 import { socketService } from '../services/socket';
 
@@ -9,6 +9,8 @@ export default function Mesas() {
   const [sesionActiva, setSesionActiva] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedMesa, setSelectedMesa] = useState(null);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
     cargarMesas();
@@ -20,8 +22,46 @@ export default function Mesas() {
 
     socketService.onSesionTiempo((data) => {
       setMesas(prev => prev.map(m => 
-        m.id_sesion === data.id_sesion 
+        // Buscar por id_sesion o id_mesa
+        (m.id_sesion === data.id_sesion || m.id_mesa === data.id_mesa)
           ? { ...m, minutos_transcurridos: data.minutos, costo_actual: data.costo }
+          : m
+      ));
+    });
+
+    // Listener para sesión finalizada
+    socketService.onSesionFinalizada((data) => {
+      setMesas(prev => prev.map(m => 
+        m.id_mesa === data.id_mesa 
+          ? { 
+              ...m, 
+              estado: 'disponible', 
+              id_sesion: null, 
+              hora_inicio: null, 
+              estado_sesion: null,
+              minutos_transcurridos: 0, 
+              costo_actual: 0 
+            }
+          : m
+      ));
+      setSuccess('Sesión finalizada correctamente');
+      setTimeout(() => setSuccess(null), 3000);
+    });
+
+    // Listener para sesión pausada
+    socketService.onSesionPausada((sesion) => {
+      setMesas(prev => prev.map(m => 
+        m.id_sesion === sesion.id_sesion 
+          ? { ...m, estado_sesion: 'pausada' }
+          : m
+      ));
+    });
+
+    // Listener para sesión reanudada
+    socketService.onSesionReanudada((sesion) => {
+      setMesas(prev => prev.map(m => 
+        m.id_sesion === sesion.id_sesion 
+          ? { ...m, estado_sesion: 'activa' }
           : m
       ));
     });
@@ -29,15 +69,20 @@ export default function Mesas() {
     return () => {
       socketService.removeListener('mesa:actualizada');
       socketService.removeListener('sesion:tiempo');
+      socketService.removeListener('sesion:finalizada');
+      socketService.removeListener('sesion:pausada');
+      socketService.removeListener('sesion:reanudada');
     };
   }, []);
 
   const cargarMesas = async () => {
     try {
+      setError(null);
       const { data } = await mesasService.getAll();
       setMesas(data);
     } catch (error) {
       console.error('Error cargando mesas:', error);
+      setError('Error al cargar las mesas');
     } finally {
       setLoading(false);
     }
@@ -45,14 +90,17 @@ export default function Mesas() {
 
   const iniciarSesion = async (mesa) => {
     try {
+      setError(null);
       const { data } = await mesasService.iniciarSesion(mesa.id_mesa, {});
-      setMesas(prev => prev.map(m => 
-        m.id_mesa === mesa.id_mesa 
-          ? { ...m, estado: 'ocupada', sesion: data }
-          : m
-      ));
+      // Recargar las mesas para obtener los datos actualizados del backend
+      await cargarMesas();
+      setSuccess('Sesión iniciada correctamente');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error iniciando sesión:', error);
+      const mensaje = error.response?.data?.error || 'Error al iniciar la sesión';
+      setError(mensaje);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -60,14 +108,17 @@ export default function Mesas() {
     if (!mesa.id_sesion) return;
     
     try {
+      setError(null);
       const { data } = await sesionesService.finalizar(mesa.id_sesion);
-      setMesas(prev => prev.map(m => 
-        m.id_mesa === mesa.id_mesa 
-          ? { ...m, estado: 'disponible', sesion: null, minutos_transcurridos: 0, costo_actual: 0 }
-          : m
-      ));
+      // La actualización se hace mediante el WebSocket, pero también recargamos por seguridad
+      await cargarMesas();
+      setSuccess('Sesión finalizada correctamente');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error finalizando sesión:', error);
+      const mensaje = error.response?.data?.error || 'Error al finalizar la sesión';
+      setError(mensaje);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -120,6 +171,20 @@ export default function Mesas() {
           Nueva Mesa
         </button>
       </div>
+
+      {/* Alertas de error y éxito */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-500/20 border border-red-500 rounded-lg flex items-center gap-2">
+          <AlertCircle className="text-red-500" size={20} />
+          <span className="text-red-200">{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-4 bg-green-500/20 border border-green-500 rounded-lg flex items-center gap-2">
+          <DollarSign className="text-green-500" size={20} />
+          <span className="text-green-200">{success}</span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -274,15 +339,19 @@ function NuevaMesaModal({ onClose, onCreated }) {
     color_hex: '#1a1a2e'
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await mesasService.create(formData);
       onCreated();
     } catch (error) {
       console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al crear la mesa';
+      setError(mensaje);
     } finally {
       setLoading(false);
     }
@@ -301,8 +370,12 @@ function NuevaMesaModal({ onClose, onCreated }) {
               onChange={(e) => setFormData({...formData, numero_mesa: e.target.value})}
               className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
               required
+              min="1"
             />
           </div>
+          {error && (
+            <p className="text-red-400 text-sm">{error}</p>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Nombre (opcional)</label>
             <input
