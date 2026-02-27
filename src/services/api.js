@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_URL = '/api';
+// URL del API - cambiar según el entorno
+// Desarrollo: http://localhost:3000
+// Producción: URL del backend desplegado (Render, Railway, etc.)
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,

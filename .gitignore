@@ -5,7 +5,7 @@ node_modules/
 dist/
 build/
 
-# Environment variables
+# Environment variables (keep .env.example for reference)
 .env
 .env.local
 .env.*.local
@@ -27,3 +27,10 @@ yarn-error.log*
 
 # Cache
 .cache/
+
+# Netlify (el archivo netlify.toml debe estar en el repo, pero _redirects se genera en build)
+# _redirects se genera automáticamente en dist/
+
+# Package lock (usar npm para consistency)
+package-lock.json
+yarn.lock
