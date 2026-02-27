@@ -14,6 +14,36 @@ export default function Mesas() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Timer para actualización en tiempo real cada segundo
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMesas(prev => prev.map(mesa => {
+        if (mesa.estado === 'ocupada' && mesa.hora_inicio && mesa.precio_hora) {
+          // Calcular tiempo transcurrido desde que startedicio
+          const ahora = new Date();
+          const inicio = new Date(mesa.hora_inicio);
+          const diffMs = ahora - inicio;
+          const diffSegundos = Math.floor(diffMs / 1000);
+          const diffMinutos = Math.floor(diffSegundos / 60);
+          
+          // Calcular costo en tiempo real (precio por hora / 3600 para obtener precio por segundo)
+          const precioPorSegundo = mesa.precio_hora / 3600;
+          const costoActual = diffSegundos * precioPorSegundo;
+          
+          return {
+            ...mesa,
+            minutos_transcurridos: diffMinutos,
+            segundos_transcurridos: diffSegundos,
+            costo_actual: costoActual
+          };
+        }
+        return mesa;
+      }));
+    }, 1000); // Actualizar cada segundo
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     cargarMesas();
     
@@ -163,19 +193,23 @@ export default function Mesas() {
     }
   };
 
-  const formatTiempo = (minutos) => {
-    if (!minutos) return '00:00:00';
+  const formatTiempo = (minutos, segundos) => {
+    if (!minutos && !segundos) return '00:00:00';
     const hrs = Math.floor(minutos / 60);
     const mins = minutos % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:00`;
+    const segs = segundos ? segundos % 60 : 0;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${segs.toString().padStart(2, '0')}`;
   };
 
   const formatCurrency = (value) => {
+    // Manejar valores NaN, undefined, null
+    const num = Number(value);
+    if (isNaN(num)) return '$ 0';
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
       minimumFractionDigits: 0
-    }).format(value || 0);
+    }).format(num);
   };
 
   if (loading) {
@@ -292,16 +326,16 @@ export default function Mesas() {
               <div className="mb-4 p-2 sm:p-3 rounded-lg bg-billar-green/20">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1 sm:gap-2 text-status-occupied">
-                    <Clock size={14} sm:size={16} />
+                    <Clock size={16} />
                     <span className="text-xs sm:text-sm font-medium">Tiempo</span>
                   </div>
                   <span className="text-lg sm:text-xl font-bold font-mono">
-                    {formatTiempo(mesa.minutos_transcurridos)}
+                    {formatTiempo(mesa.minutos_transcurridos, mesa.segundos_transcurridos)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 sm:gap-2 text-billar-gold">
-                    <DollarSign size={14} sm:size={16} />
+                    <DollarSign size={16} />
                     <span className="text-xs sm:text-sm font-medium">Costo</span>
                   </div>
                   <span className="text-base sm:text-lg font-bold text-billar-gold">
@@ -323,7 +357,7 @@ export default function Mesas() {
                   onClick={() => iniciarSesion(mesa)}
                   className="flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-status-available text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
                 >
-                  <Play size={16} sm:size={18} />
+                  <Play size={18} />
                   Iniciar
                 </button>
               ) : mesa.estado === 'ocupada' ? (
@@ -331,7 +365,7 @@ export default function Mesas() {
                   onClick={() => finalizarSesion(mesa)}
                   className="flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-status-occupied text-white rounded-lg font-medium hover:bg-red-600 transition-colors text-sm"
                 >
-                  <Square size={16} sm:size={18} />
+                  <Square size={18} />
                   Finalizar
                 </button>
               ) : (
