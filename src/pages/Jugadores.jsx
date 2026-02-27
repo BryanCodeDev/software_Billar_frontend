@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trophy, User, Phone, Mail, Gamepad2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Trophy, User, Phone, Mail, Gamepad2, AlertCircle, Edit2, Trash2 } from 'lucide-react';
 import { jugadoresService, mesasService } from '../services/api';
 
 export default function Jugadores() {
@@ -8,6 +8,8 @@ export default function Jugadores() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPartidaModal, setShowPartidaModal] = useState(false);
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState(null);
   const [error, setError] = useState(null);
@@ -37,6 +39,36 @@ export default function Jugadores() {
       setRanking(data);
     } catch (error) {
       console.error('Error:', error);
+    }
+  };
+
+  const handleEditJugador = (jugador) => {
+    setJugadorSeleccionado(jugador);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteJugador = (jugador) => {
+    setJugadorSeleccionado(jugador);
+    setShowDeleteModal(true);
+  };
+
+  const eliminarJugador = async () => {
+    if (!jugadorSeleccionado) return;
+    
+    try {
+      setError(null);
+      await jugadoresService.delete(jugadorSeleccionado.id_jugador);
+      setShowDeleteModal(false);
+      setJugadorSeleccionado(null);
+      await cargarJugadores();
+      await cargarRanking();
+      setSuccess('Jugador eliminado correctamente');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error('Error eliminando jugador:', error);
+      const mensaje = error.response?.data?.error || 'Error al eliminar el jugador';
+      setError(mensaje);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -201,6 +233,30 @@ export default function Jugadores() {
                     )}
                   </div>
                 )}
+
+                {/* Botones Editar y Eliminar */}
+                <div className="flex gap-2 mt-3 pt-3 border-t border-white/10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditJugador(jugador);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/40 transition-colors text-xs"
+                  >
+                    <Edit2 size={14} />
+                    Editar
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteJugador(jugador);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/40 transition-colors text-xs"
+                  >
+                    <Trash2 size={14} />
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -237,6 +293,56 @@ export default function Jugadores() {
             cargarRanking();
           }} 
         />
+      )}
+
+      {/* Modal Editar Jugador */}
+      {showEditModal && jugadorSeleccionado && (
+        <EditarJugadorModal 
+          jugador={jugadorSeleccionado}
+          onClose={() => {
+            setShowEditModal(false);
+            setJugadorSeleccionado(null);
+          }} 
+          onUpdated={() => {
+            setShowEditModal(false);
+            setJugadorSeleccionado(null);
+            cargarJugadores();
+            cargarRanking();
+            setSuccess('Jugador actualizado correctamente');
+            setTimeout(() => setSuccess(null), 3000);
+          }}
+          setError={setError}
+        />
+      )}
+
+      {/* Modal Eliminar Jugador */}
+      {showDeleteModal && jugadorSeleccionado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl p-4 sm:p-6 w-full max-w-md">
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">Eliminar Jugador</h2>
+            <p className="text-gray-300 mb-6">
+              ¿Estás seguro de eliminar al jugador <strong>{jugadorSeleccionado.nombre}</strong>?
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setJugadorSeleccionado(null);
+                }}
+                className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={eliminarJugador}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -340,6 +446,128 @@ function NuevoJugadorModal({ onClose, onCreated }) {
               className="flex-1 px-4 py-2 bg-billar-gold text-billar-green-dark rounded-lg font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
             >
               {loading ? 'Creando...' : 'Crear'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditarJugadorModal({ jugador, onClose, onUpdated, setError }) {
+  const [formData, setFormData] = useState({
+    nombre: jugador.nombre,
+    apodo: jugador.apodo || '',
+    telefono: jugador.telefono || '',
+    email: jugador.email || '',
+    nivel: jugador.nivel,
+    activo: jugador.activo
+  });
+  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setLocalError(null);
+    try {
+      await jugadoresService.update(jugador.id_jugador, formData);
+      onUpdated();
+    } catch (error) {
+      console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al actualizar el jugador';
+      setLocalError(mensaje);
+      setError(mensaje);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="glass rounded-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg sm:text-xl font-bold mb-4">Editar Jugador</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Nombre *</label>
+            <input
+              type="text"
+              value={formData.nombre}
+              onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              required
+            />
+          </div>
+          {localError && (
+            <p className="text-red-400 text-sm">{localError}</p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Apodo</label>
+            <input
+              type="text"
+              value={formData.apodo}
+              onChange={(e) => setFormData({...formData, apodo: e.target.value})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Teléfono</label>
+              <input
+                type="tel"
+                value={formData.telefono}
+                onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Nivel</label>
+              <select
+                value={formData.nivel}
+                onChange={(e) => setFormData({...formData, nivel: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              >
+                <option value="principiante">Principiante</option>
+                <option value="intermedio">Intermedio</option>
+                <option value="avanzado">Avanzado</option>
+                <option value="experto">Experto</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Estado</label>
+            <select
+              value={formData.activo ? 'true' : 'false'}
+              onChange={(e) => setFormData({...formData, activo: e.target.value === 'true'})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+            >
+              <option value="true">Activo</option>
+              <option value="false">Inactivo</option>
+            </select>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-billar-gold text-billar-green-dark rounded-lg font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
         </form>

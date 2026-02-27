@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, AlertTriangle, Package, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Package, TrendingUp, TrendingDown, AlertCircle, Edit2, Trash2 } from 'lucide-react';
 import { productosService, categoriasService } from '../services/api';
 
 export default function Inventario() {
@@ -10,6 +10,8 @@ export default function Inventario() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [showTable, setShowTable] = useState(true);
@@ -57,6 +59,35 @@ export default function Inventario() {
     if (actual === 0) return 'text-red-500';
     if (actual <= minimo) return 'text-yellow-500';
     return 'text-green-500';
+  };
+
+  const handleEditProducto = (producto) => {
+    setProductoSeleccionado(producto);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteProducto = (producto) => {
+    setProductoSeleccionado(producto);
+    setShowDeleteModal(true);
+  };
+
+  const eliminarProducto = async () => {
+    if (!productoSeleccionado) return;
+    
+    try {
+      setError(null);
+      await productosService.delete(productoSeleccionado.id_producto);
+      setShowDeleteModal(false);
+      setProductoSeleccionado(null);
+      await cargarDatos();
+      setSuccess('Producto eliminado correctamente');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error('Error eliminando producto:', error);
+      const mensaje = error.response?.data?.error || 'Error al eliminar el producto';
+      setError(mensaje);
+      setTimeout(() => setError(null), 5000);
+    }
   };
 
   if (loading) {
@@ -253,15 +284,20 @@ export default function Inventario() {
                     </span>
                   </td>
                   <td className="px-3 sm:px-4 py-3">
-                    <div className="flex justify-center">
+                    <div className="flex justify-center gap-1">
                       <button
-                        onClick={() => {
-                          setProductoSeleccionado(producto);
-                          setShowMovimientoModal(true);
-                        }}
-                        className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-white/10 rounded hover:bg-white/20 transition-colors"
+                        onClick={() => handleEditProducto(producto)}
+                        className="p-1.5 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40 transition-colors"
+                        title="Editar"
                       >
-                        ± Stock
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProducto(producto)}
+                        className="p-1.5 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
@@ -314,15 +350,31 @@ export default function Inventario() {
                 }`}>
                   {producto.estado}
                 </span>
-                <button
-                  onClick={() => {
-                    setProductoSeleccionado(producto);
-                    setShowMovimientoModal(true);
-                  }}
-                  className="px-3 py-1 text-xs bg-white/10 rounded hover:bg-white/20 transition-colors"
-                >
-                  ± Stock
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEditProducto(producto)}
+                    className="p-1.5 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProducto(producto)}
+                    className="p-1.5 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40 transition-colors"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProductoSeleccionado(producto);
+                      setShowMovimientoModal(true);
+                    }}
+                    className="px-2 py-1 text-xs bg-white/10 rounded hover:bg-white/20 transition-colors"
+                  >
+                    ± Stock
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -355,6 +407,56 @@ export default function Inventario() {
             cargarDatos();
           }}
         />
+      )}
+
+      {/* Modal Editar Producto */}
+      {showEditModal && productoSeleccionado && (
+        <EditarProductoModal 
+          producto={productoSeleccionado}
+          categorias={categorias}
+          onClose={() => {
+            setShowEditModal(false);
+            setProductoSeleccionado(null);
+          }} 
+          onUpdated={() => {
+            setShowEditModal(false);
+            setProductoSeleccionado(null);
+            cargarDatos();
+            setSuccess('Producto actualizado correctamente');
+            setTimeout(() => setSuccess(null), 3000);
+          }}
+          setError={setError}
+        />
+      )}
+
+      {/* Modal Eliminar Producto */}
+      {showDeleteModal && productoSeleccionado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl p-4 sm:p-6 w-full max-w-md">
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">Eliminar Producto</h2>
+            <p className="text-gray-300 mb-6">
+              ¿Estás seguro de eliminar el producto <strong>{productoSeleccionado.nombre}</strong>?
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setProductoSeleccionado(null);
+                }}
+                className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={eliminarProducto}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -593,6 +695,158 @@ function MovimientoModal({ producto, onClose, onSuccess }) {
               placeholder="Opcional"
               className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
             />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-billar-gold text-billar-green-dark rounded-lg font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditarProductoModal({ producto, categorias, onClose, onUpdated, setError }) {
+  const [formData, setFormData] = useState({
+    nombre: producto.nombre,
+    id_categoria: producto.id_categoria,
+    precio_venta: producto.precio_venta,
+    precio_compra: producto.precio_compra || '',
+    stock_minimo: producto.stock_minimo,
+    unidad_medida: producto.unidad_medida,
+    codigo_barras: producto.codigo_barras || '',
+    estado: producto.estado
+  });
+  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setLocalError(null);
+    try {
+      await productosService.update(producto.id_producto, formData);
+      onUpdated();
+    } catch (error) {
+      console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al actualizar el producto';
+      setLocalError(mensaje);
+      setError(mensaje);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="glass rounded-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg sm:text-xl font-bold mb-4">Editar Producto</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Nombre *</label>
+            <input
+              type="text"
+              value={formData.nombre}
+              onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              required
+            />
+          </div>
+          {localError && (
+            <p className="text-red-400 text-sm">{localError}</p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Categoría *</label>
+            <select
+              value={formData.id_categoria}
+              onChange={(e) => setFormData({...formData, id_categoria: e.target.value})}
+              className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              required
+            >
+              <option value="">Seleccionar...</option>
+              {categorias.map(c => (
+                <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Precio Venta *</label>
+              <input
+                type="number"
+                value={formData.precio_venta}
+                onChange={(e) => setFormData({...formData, precio_venta: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Precio Compra</label>
+              <input
+                type="number"
+                value={formData.precio_compra}
+                onChange={(e) => setFormData({...formData, precio_compra: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Stock Mínimo</label>
+              <input
+                type="number"
+                value={formData.stock_minimo}
+                onChange={(e) => setFormData({...formData, stock_minimo: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Unidad</label>
+              <select
+                value={formData.unidad_medida}
+                onChange={(e) => setFormData({...formData, unidad_medida: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              >
+                <option value="und">Unidad</option>
+                <option value="kg">Kilogramo</option>
+                <option value="lt">Litro</option>
+                <option value="pack">Pack</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Código Barras</label>
+              <input
+                type="text"
+                value={formData.codigo_barras}
+                onChange={(e) => setFormData({...formData, codigo_barras: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Estado</label>
+              <select
+                value={formData.estado}
+                onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
+              >
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <button
