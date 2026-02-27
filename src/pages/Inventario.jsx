@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, AlertTriangle, Package, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Package, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { productosService, categoriasService } from '../services/api';
 
 export default function Inventario() {
@@ -13,6 +13,8 @@ export default function Inventario() {
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [showTable, setShowTable] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
     cargarDatos();
@@ -20,6 +22,7 @@ export default function Inventario() {
 
   const cargarDatos = async () => {
     try {
+      setError(null);
       const [prodRes, catRes, bajoRes] = await Promise.all([
         productosService.getAll(),
         categoriasService.getAll(),
@@ -30,6 +33,7 @@ export default function Inventario() {
       setBajoStock(bajoRes.data);
     } catch (error) {
       console.error('Error:', error);
+      setError('Error al cargar el inventario');
     } finally {
       setLoading(false);
     }
@@ -79,6 +83,20 @@ export default function Inventario() {
           Nuevo Producto
         </button>
       </div>
+
+      {/* Alertas de error */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-500/20 border border-red-500 rounded-lg flex items-center gap-2">
+          <AlertCircle className="text-red-500" size={20} />
+          <span className="text-red-200">{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-4 bg-green-500/20 border border-green-500 rounded-lg flex items-center gap-2">
+          <AlertTriangle className="text-green-500" size={20} />
+          <span className="text-green-200">{success}</span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -354,15 +372,19 @@ function NuevoProductoModal({ categorias, onClose, onCreated }) {
     codigo_barras: ''
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await productosService.create(formData);
       onCreated();
     } catch (error) {
       console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al crear el producto';
+      setError(mensaje);
     } finally {
       setLoading(false);
     }
@@ -489,19 +511,36 @@ function MovimientoModal({ producto, onClose, onSuccess }) {
   const [cantidad, setCantidad] = useState('');
   const [motivo, setMotivo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
+    
+    const cantidadNum = parseInt(cantidad);
+    if (!cantidadNum || cantidadNum <= 0) {
+      setError('La cantidad debe ser mayor a 0');
+      setLoading(false);
+      return;
+    }
+    
     try {
       if (tipo === 'entrada') {
-        await productosService.entrada({ id_producto: producto.id_producto, cantidad: parseInt(cantidad), motivo });
+        await productosService.entrada({ id_producto: producto.id_producto, cantidad: cantidadNum, motivo });
       } else {
-        await productosService.salida({ id_producto: producto.id_producto, cantidad: parseInt(cantidad), motivo });
+        if (cantidadNum > producto.stock_actual) {
+          setError('Cantidad mayor al stock disponible (' + producto.stock_actual + ')');
+          setLoading(false);
+          return;
+        }
+        await productosService.salida({ id_producto: producto.id_producto, cantidad: cantidadNum, motivo });
       }
       onSuccess();
     } catch (error) {
       console.error('Error:', error);
+      const mensaje = error.response?.data?.error || 'Error al procesar el movimiento';
+      setError(mensaje);
     } finally {
       setLoading(false);
     }
