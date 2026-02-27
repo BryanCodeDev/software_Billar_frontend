@@ -9,6 +9,8 @@ export default function Clientes() {
   const [showModal, setShowModal] = useState(false);
   const [showConsumoModal, setShowConsumoModal] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
     cargarClientes();
@@ -48,6 +50,18 @@ export default function Clientes() {
 
   return (
     <div>
+      {/* Alertas */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400">
+          {success}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -202,11 +216,17 @@ export default function Clientes() {
       {/* Modal Nuevo Cliente */}
       {showModal && (
         <NuevoClienteModal 
-          onClose={() => setShowModal(false)} 
+          onClose={() => {
+            setShowModal(false);
+            setError(null);
+          }} 
           onCreated={() => {
             setShowModal(false);
+            setSuccess('Cliente creado exitosamente');
             cargarClientes();
+            setTimeout(() => setSuccess(null), 3000);
           }} 
+          setError={setError}
         />
       )}
 
@@ -217,19 +237,23 @@ export default function Clientes() {
           onClose={() => {
             setShowConsumoModal(false);
             setClienteSeleccionado(null);
+            setError(null);
           }} 
           onSuccess={() => {
             setShowConsumoModal(false);
             setClienteSeleccionado(null);
+            setSuccess('Consumo registrado exitosamente');
             cargarClientes();
+            setTimeout(() => setSuccess(null), 3000);
           }}
+          setError={setError}
         />
       )}
     </div>
   );
 }
 
-function NuevoClienteModal({ onClose, onCreated }) {
+function NuevoClienteModal({ onClose, onCreated, setError }) {
   const [formData, setFormData] = useState({
     nombre: '',
     telefono: '',
@@ -246,6 +270,7 @@ function NuevoClienteModal({ onClose, onCreated }) {
       onCreated();
     } catch (error) {
       console.error('Error:', error);
+      setError(error.response?.data?.error || 'Error al crear cliente');
     } finally {
       setLoading(false);
     }
@@ -315,7 +340,7 @@ function NuevoClienteModal({ onClose, onCreated }) {
   );
 }
 
-function ConsumoModal({ cliente, onClose, onSuccess }) {
+function ConsumoModal({ cliente, onClose, onSuccess, setError }) {
   const [productos, setProductos] = useState([]);
   const [formData, setFormData] = useState({
     id_producto: '',
@@ -340,6 +365,13 @@ function ConsumoModal({ cliente, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validar stock
+    if (productoSeleccionado && parseInt(formData.cantidad) > productoSeleccionado.stock_actual) {
+      setError('Stock insuficiente. Disponible: ' + productoSeleccionado.stock_actual);
+      return;
+    }
+    
     setLoading(true);
     try {
       await consumosService.create({
@@ -350,6 +382,7 @@ function ConsumoModal({ cliente, onClose, onSuccess }) {
       onSuccess();
     } catch (error) {
       console.error('Error:', error);
+      setError(error.response?.data?.error || 'Error al registrar consumo');
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,14 @@ export default function Configuracion() {
   const [config, setConfig] = useState({});
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [passwordData, setPasswordData] = useState({
+    passwordActual: '',
+    passwordNuevo: '',
+    passwordConfirmar: ''
+  });
+  const [cambiandoPassword, setCambiandoPassword] = useState(false);
 
   useEffect(() => {
     cargarConfig();
@@ -28,13 +36,52 @@ export default function Configuracion() {
 
   const handleSave = async (key) => {
     setGuardando(true);
+    setError(null);
     try {
       await configService.update(key, { valor: config[key] });
-      alert('Guardado correctamente');
+      setSuccess('Guardado correctamente');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error:', error);
+      setError('Error al guardar');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    if (!passwordData.passwordActual || !passwordData.passwordNuevo || !passwordData.passwordConfirmar) {
+      setError('Todos los campos son requeridos');
+      return;
+    }
+    
+    if (passwordData.passwordNuevo !== passwordData.passwordConfirmar) {
+      setError('Las contraseñas no coinciden');
+      return;
+    }
+    
+    if (passwordData.passwordNuevo.length < 4) {
+      setError('La contraseña debe tener al menos 4 caracteres');
+      return;
+    }
+    
+    setCambiandoPassword(true);
+    setError(null);
+    try {
+      await configService.cambiarPassword({
+        passwordActual: passwordData.passwordActual,
+        passwordNuevo: passwordData.passwordNuevo
+      });
+      setSuccess('Contraseña actualizada correctamente');
+      setPasswordData({ passwordActual: '', passwordNuevo: '', passwordConfirmar: '' });
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error.response?.data?.error || 'Error al cambiar contraseña');
+    } finally {
+      setCambiandoPassword(false);
     }
   };
 
@@ -48,6 +95,18 @@ export default function Configuracion() {
 
   return (
     <div>
+      {/* Alertas */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400">
+          {success}
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Configuración</h1>
@@ -199,11 +258,13 @@ export default function Configuracion() {
             <h2 className="text-base sm:text-lg font-bold">Cambiar Contraseña de Acceso</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <form onSubmit={handlePasswordChange} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Contraseña Actual</label>
               <input
                 type="password"
+                value={passwordData.passwordActual}
+                onChange={(e) => setPasswordData({...passwordData, passwordActual: e.target.value})}
                 placeholder="••••••••"
                 className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
               />
@@ -212,6 +273,8 @@ export default function Configuracion() {
               <label className="block text-sm font-medium text-gray-300 mb-1">Nueva Contraseña</label>
               <input
                 type="password"
+                value={passwordData.passwordNuevo}
+                onChange={(e) => setPasswordData({...passwordData, passwordNuevo: e.target.value})}
                 placeholder="••••••••"
                 className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
               />
@@ -220,17 +283,21 @@ export default function Configuracion() {
               <label className="block text-sm font-medium text-gray-300 mb-1">Confirmar</label>
               <input
                 type="password"
+                value={passwordData.passwordConfirmar}
+                onChange={(e) => setPasswordData({...passwordData, passwordConfirmar: e.target.value})}
                 placeholder="••••••••"
                 className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:border-billar-gold"
               />
             </div>
-          </div>
+          </form>
           
           <div className="mt-4">
             <button
-              className="px-6 py-2 bg-billar-gold text-billar-green-dark rounded-lg font-medium hover:bg-yellow-400 transition-colors"
+              onClick={handlePasswordChange}
+              disabled={cambiandoPassword}
+              className="px-6 py-2 bg-billar-gold text-billar-green-dark rounded-lg font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
             >
-              Cambiar Contraseña
+              {cambiandoPassword ? 'Cambiando...' : 'Cambiar Contraseña'}
             </button>
           </div>
         </div>
