@@ -1,9 +1,9 @@
 import axios from 'axios';
 
 // URL del API - cambiar según el entorno
-// Desarrollo: http://localhost:3000
-// Producción: URL del backend desplegado (Render, Railway, etc.)
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Desarrollo local: /api (usa proxy de vite)
+// Producción: https://tu-backend.up.railway.app (URL de Railway)
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://tu-backend.up.railway.app' : '/api');
 
 const api = axios.create({
   baseURL: API_URL,
